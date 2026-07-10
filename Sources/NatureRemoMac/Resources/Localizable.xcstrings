@@ -1,0 +1,91 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "API" : {
+      "localizations" : {
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "API" } }
+      }
+    },
+    "API Access" : {
+      "localizations" : {
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "APIアクセス" } }
+      }
+    },
+    "Account" : {
+      "localizations" : {
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "アカウント" } }
+      }
+    },
+    "Appliances" : {
+      "localizations" : {
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "家電" } }
+      }
+    },
+    "Connect Nature Remo" : {
+      "localizations" : {
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "Nature Remoに接続" } }
+      }
+    },
+    "Devices" : {
+      "localizations" : {
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "デバイス" } }
+      }
+    },
+    "Open Nature Home" : {
+      "localizations" : {
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "Nature Homeを開く" } }
+      }
+    },
+    "Paste your personal access token to load your appliances." : {
+      "localizations" : {
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "Personal access tokenを貼り付けると家電を読み込みます。" } }
+      }
+    },
+    "Personal access token" : {
+      "localizations" : {
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "Personal access token" } }
+      }
+    },
+    "Refresh" : {
+      "localizations" : {
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "更新" } }
+      }
+    },
+    "Refresh Appliances" : {
+      "localizations" : {
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "家電を更新" } }
+      }
+    },
+    "Remove" : {
+      "localizations" : {
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "削除" } }
+      }
+    },
+    "Save" : {
+      "localizations" : {
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "保存" } }
+      }
+    },
+    "Save Token" : {
+      "localizations" : {
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "トークンを保存" } }
+      }
+    },
+    "Settings" : {
+      "localizations" : {
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "設定" } }
+      }
+    },
+    "Status" : {
+      "localizations" : {
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "状態" } }
+      }
+    },
+    "Validate" : {
+      "localizations" : {
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "確認" } }
+      }
+    }
+  },
+  "version" : "1.0"
+}
