@@ -1,0 +1,62 @@
+name: Bug report
+description: Report a reproducible NatureRemoMac problem without sharing credentials.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Never paste a Nature Remo access token, account response, device ID, appliance ID, serial number, or private home name into this form.** Revoke any token that has already been exposed.
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      placeholder: "For example: macOS 15.5"
+    validations:
+      required: true
+  - type: input
+    id: revision
+    attributes:
+      label: NatureRemoMac revision
+      description: A release tag or commit hash. Do not include a token.
+      placeholder: "For example: v0.1.0 or abc1234"
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      options:
+        - Setup or token validation
+        - Device or sensor refresh
+        - Air conditioner control
+        - Light control
+        - TV control
+        - Learned signal control
+        - Menu bar
+        - Build or launch
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Describe the problem with all private identifiers removed.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      description: Include the HTTP status code if shown, but do not paste raw API bodies.
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Credential check
+      options:
+        - label: I removed all tokens and private account or device information.
+          required: true
