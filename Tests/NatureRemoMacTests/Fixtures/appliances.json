@@ -1,0 +1,43 @@
+[
+  {
+    "id": "appliance-public-fixture",
+    "type": "AC",
+    "nickname": "Air Conditioner",
+    "image": "ico_ac_1",
+    "device": {
+      "id": "device-public-fixture",
+      "name": "Living Room Remo"
+    },
+    "signals": [
+      {
+        "id": "signal-public-fixture",
+        "name": "Power",
+        "image": "ico_io"
+      }
+    ],
+    "aircon": {
+      "range": {
+        "modes": {
+          "cool": {
+            "temp": ["22", "23", "24"],
+            "vol": ["auto", "1"],
+            "dir": ["auto"],
+            "dirh": ["auto"]
+          }
+        },
+        "fixedButtons": ["power-off"]
+      },
+      "tempUnit": "c"
+    },
+    "settings": {
+      "temp": "24",
+      "temp_unit": "c",
+      "mode": "cool",
+      "vol": "auto",
+      "dir": "auto",
+      "dirh": "auto",
+      "button": "",
+      "updated_at": "2026-01-01T00:00:00Z"
+    }
+  }
+]

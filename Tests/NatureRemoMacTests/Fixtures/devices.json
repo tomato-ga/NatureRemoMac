@@ -1,0 +1,14 @@
+[
+  {
+    "id": "device-public-fixture",
+    "name": "Living Room Remo",
+    "firmware_version": "fixture-1.0",
+    "newest_events": {
+      "te": {
+        "name": "te",
+        "val": 23.5,
+        "created_at": "2026-01-01T00:00:00Z"
+      }
+    }
+  }
+]
