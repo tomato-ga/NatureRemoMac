@@ -327,18 +327,20 @@ struct AirconControlView: View {
     }
 
     private func normalizeSelectionsForMode() {
-        if temperatureOptions.contains(temperature) == false {
-            temperature = temperatureOptions.first ?? temperature
+        guard let selectedModeRange else {
+            return
         }
-        if volumeOptions.contains(airVolume) == false {
-            airVolume = volumeOptions.first ?? airVolume
-        }
-        if directionOptions.contains(airDirection) == false {
-            airDirection = directionOptions.first ?? airDirection
-        }
-        if horizontalOptions.isEmpty == false && horizontalOptions.contains(horizontalDirection) == false {
-            horizontalDirection = horizontalOptions.first ?? horizontalDirection
-        }
+
+        temperature = normalizedAirconValue(
+            temperature,
+            allowedValues: numericSort(selectedModeRange.temp)
+        )
+        airVolume = normalizedAirconValue(airVolume, allowedValues: selectedModeRange.vol)
+        airDirection = normalizedAirconValue(airDirection, allowedValues: selectedModeRange.dir)
+        horizontalDirection = normalizedAirconValue(
+            horizontalDirection,
+            allowedValues: selectedModeRange.dirh
+        )
     }
 
     private func stepTemperature(by delta: Int) {
@@ -434,21 +436,27 @@ struct AirconControlView: View {
     }
 
     private func sendCurrentSettings(powerOn: Bool) {
+        normalizeSelectionsForMode()
         powerIsOn = powerOn
+        let form = airconForm(button: "")
         Task {
-            await store.setAircon(appliance: appliance, form: airconForm(button: ""))
+            await store.setAircon(appliance: appliance, form: form)
         }
     }
 
     private func sendPowerOff() {
+        normalizeSelectionsForMode()
+        let form = airconForm(button: "power-off")
         Task {
-            await store.setAircon(appliance: appliance, form: airconForm(button: "power-off"))
+            await store.setAircon(appliance: appliance, form: form)
         }
     }
 
     private func sendButton(_ button: String) {
+        normalizeSelectionsForMode()
+        let form = airconForm(button: button)
         Task {
-            await store.setAircon(appliance: appliance, form: airconForm(button: button))
+            await store.setAircon(appliance: appliance, form: form)
         }
     }
 
@@ -557,4 +565,11 @@ struct AirconControlView: View {
             return "bolt.circle"
         }
     }
+}
+
+func normalizedAirconValue(_ currentValue: String, allowedValues: [String]) -> String {
+    guard allowedValues.isEmpty == false, allowedValues.contains(currentValue) == false else {
+        return currentValue
+    }
+    return allowedValues[0]
 }
