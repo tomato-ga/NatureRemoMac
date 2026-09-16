@@ -28,6 +28,10 @@ final class RemoStore: ObservableObject {
     private var isPollingApplianceStates = false
     private var isBackgroundRefreshing = false
     private var backgroundRefreshBackoffUntil: Date?
+    private var dataRequestGeneration: UInt64 = 0
+    private var foregroundLoadingCount = 0
+    private var activeAirconCommandIDs: Set<String> = []
+    private var airconCommandWaiters: [String: [CheckedContinuation<Void, Never>]] = [:]
 
     init(
         tokenStore: any TokenStoring = KeychainTokenStore(),
@@ -133,12 +137,14 @@ final class RemoStore: ObservableObject {
             isBackgroundRefreshing = true
         }
 
+        let requestGeneration = beginDataRequest()
+
         if setsLoading {
-            isLoading = true
+            beginForegroundLoading()
         }
         defer {
             if setsLoading {
-                isLoading = false
+                endForegroundLoading()
             }
             if showsNotice == false {
                 isBackgroundRefreshing = false
@@ -152,13 +158,28 @@ final class RemoStore: ObservableObject {
                 async let fetchedUser = client.fetchUser()
                 async let fetchedDevices = client.fetchDevices()
                 async let fetchedAppliances = client.fetchAppliances()
+                let (newUser, newDevices, newAppliances) = try await (
+                    fetchedUser,
+                    fetchedDevices,
+                    fetchedAppliances
+                )
 
-                user = try await fetchedUser
-                devices = try await fetchedDevices
-                appliances = try await fetchedAppliances.sorted { $0.nickname.localizedCaseInsensitiveCompare($1.nickname) == .orderedAscending }
+                guard requestGeneration == dataRequestGeneration else {
+                    return
+                }
+
+                user = newUser
+                devices = newDevices
+                appliances = sortedAppliances(newAppliances)
 
             case .appliancesOnly:
-                appliances = try await client.fetchAppliances().sorted { $0.nickname.localizedCaseInsensitiveCompare($1.nickname) == .orderedAscending }
+                let newAppliances = try await client.fetchAppliances()
+
+                guard requestGeneration == dataRequestGeneration else {
+                    return
+                }
+
+                appliances = sortedAppliances(newAppliances)
             }
 
             if selectedApplianceID == nil || appliances.contains(where: { $0.id == selectedApplianceID }) == false {
@@ -171,6 +192,10 @@ final class RemoStore: ObservableObject {
                 notice = Notice(kind: .success, message: "Nature Remo data refreshed.")
             }
         } catch {
+            guard requestGeneration == dataRequestGeneration else {
+                return
+            }
+
             if let resetAt = rateLimitResetDate(error) {
                 backgroundRefreshBackoffUntil = max(resetAt, Date().addingTimeInterval(30))
             }
@@ -187,9 +212,10 @@ final class RemoStore: ObservableObject {
             return
         }
 
-        isLoading = true
+        let requestGeneration = beginDataRequest()
+        beginForegroundLoading()
         defer {
-            isLoading = false
+            endForegroundLoading()
         }
 
         do {
@@ -197,10 +223,16 @@ final class RemoStore: ObservableObject {
             let validatedUser = try await client.fetchUser()
             async let fetchedDevices = client.fetchDevices()
             async let fetchedAppliances = client.fetchAppliances()
-            let validatedDevices = try await fetchedDevices
-            let validatedAppliances = try await fetchedAppliances.sorted {
-                $0.nickname.localizedCaseInsensitiveCompare($1.nickname) == .orderedAscending
+            let (validatedDevices, newAppliances) = try await (
+                fetchedDevices,
+                fetchedAppliances
+            )
+
+            guard requestGeneration == dataRequestGeneration else {
+                return
             }
+
+            let validatedAppliances = sortedAppliances(newAppliances)
 
             try tokenStore.saveToken(trimmed)
             token = trimmed
@@ -215,6 +247,9 @@ final class RemoStore: ObservableObject {
             backgroundRefreshBackoffUntil = nil
             notice = Notice(kind: .success, message: "Token validated and Nature Remo data refreshed.")
         } catch {
+            guard requestGeneration == dataRequestGeneration else {
+                return
+            }
             notice = Notice(kind: .failure, message: error.localizedDescription)
         }
     }
@@ -222,6 +257,7 @@ final class RemoStore: ObservableObject {
     func clearToken() {
         do {
             try tokenStore.deleteToken()
+            invalidateDataRequests()
             token = nil
             tokenIsConfigured = false
             user = nil
@@ -249,14 +285,20 @@ final class RemoStore: ObservableObject {
     }
 
     func setAircon(appliance: RemoAppliance, form: [String: String], refreshAfterSend: Bool = true) async {
+        await acquireAirconCommandSlot(applianceID: appliance.id)
+        defer {
+            releaseAirconCommandSlot(applianceID: appliance.id)
+        }
+
         guard let client = makeClient() else {
             return
         }
 
         do {
             try await client.setAircon(applianceID: appliance.id, form: form)
+            invalidateDataRequests()
             notice = Notice(kind: .success, message: "Sent air conditioner settings to \(appliance.nickname).")
-            if refreshAfterSend {
+            if refreshAfterSend && hasWaitingAirconCommand(applianceID: appliance.id) == false {
                 await refreshApplianceStatesIfConfigured()
             }
         } catch {
@@ -333,6 +375,57 @@ final class RemoStore: ObservableObject {
         }
 
         return clientFactory(token)
+    }
+
+    private func beginDataRequest() -> UInt64 {
+        dataRequestGeneration &+= 1
+        return dataRequestGeneration
+    }
+
+    private func invalidateDataRequests() {
+        dataRequestGeneration &+= 1
+    }
+
+    private func beginForegroundLoading() {
+        foregroundLoadingCount += 1
+        isLoading = true
+    }
+
+    private func endForegroundLoading() {
+        foregroundLoadingCount = max(0, foregroundLoadingCount - 1)
+        isLoading = foregroundLoadingCount > 0
+    }
+
+    private func sortedAppliances(_ appliances: [RemoAppliance]) -> [RemoAppliance] {
+        appliances.sorted {
+            $0.nickname.localizedCaseInsensitiveCompare($1.nickname) == .orderedAscending
+        }
+    }
+
+    private func acquireAirconCommandSlot(applianceID: String) async {
+        if activeAirconCommandIDs.insert(applianceID).inserted {
+            return
+        }
+
+        await withCheckedContinuation { continuation in
+            airconCommandWaiters[applianceID, default: []].append(continuation)
+        }
+    }
+
+    private func releaseAirconCommandSlot(applianceID: String) {
+        guard var waiters = airconCommandWaiters[applianceID], waiters.isEmpty == false else {
+            airconCommandWaiters[applianceID] = nil
+            activeAirconCommandIDs.remove(applianceID)
+            return
+        }
+
+        let next = waiters.removeFirst()
+        airconCommandWaiters[applianceID] = waiters.isEmpty ? nil : waiters
+        next.resume()
+    }
+
+    private func hasWaitingAirconCommand(applianceID: String) -> Bool {
+        airconCommandWaiters[applianceID]?.isEmpty == false
     }
 
     private var isBackgroundRefreshAllowed: Bool {

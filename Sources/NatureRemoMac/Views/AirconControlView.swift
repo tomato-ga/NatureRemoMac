@@ -1,31 +1,42 @@
 import SwiftUI
 
-struct AirconControlView: View {
-    @EnvironmentObject private var store: RemoStore
-    let appliance: RemoAppliance
-
-    @State private var temperature: String
-    @State private var operationMode: String
-    @State private var airVolume: String
-    @State private var airDirection: String
-    @State private var horizontalDirection: String
-    @State private var powerIsOn: Bool
-    @State private var dragStartTemperature: String?
+struct AirconControlState: Equatable {
+    var temperature: String
+    var operationMode: String
+    var airVolume: String
+    var airDirection: String
+    var horizontalDirection: String
+    var powerIsOn: Bool
 
     init(appliance: RemoAppliance) {
-        self.appliance = appliance
-
         let initialMode = appliance.settings?.mode
             ?? appliance.aircon?.range?.modes.keys.sorted().first
             ?? "cool"
         let modeRange = appliance.aircon?.range?.modes[initialMode]
 
-        _operationMode = State(initialValue: initialMode)
-        _temperature = State(initialValue: appliance.settings?.temperature ?? modeRange?.temp.first ?? "26")
-        _airVolume = State(initialValue: appliance.settings?.volume ?? modeRange?.vol.first ?? "")
-        _airDirection = State(initialValue: appliance.settings?.direction ?? modeRange?.dir.first ?? "")
-        _horizontalDirection = State(initialValue: appliance.settings?.horizontalDirection ?? modeRange?.dirh.first ?? "")
-        _powerIsOn = State(initialValue: appliance.settings?.button?.lowercased() != "power-off")
+        temperature = appliance.settings?.temperature ?? modeRange?.temp.first ?? "26"
+        operationMode = initialMode
+        airVolume = appliance.settings?.volume ?? modeRange?.vol.first ?? ""
+        airDirection = appliance.settings?.direction ?? modeRange?.dir.first ?? ""
+        horizontalDirection = appliance.settings?.horizontalDirection ?? modeRange?.dirh.first ?? ""
+        powerIsOn = appliance.settings?.button?.lowercased() != "power-off"
+    }
+
+    mutating func synchronize(with appliance: RemoAppliance) {
+        self = Self(appliance: appliance)
+    }
+}
+
+struct AirconControlView: View {
+    @EnvironmentObject private var store: RemoStore
+    let appliance: RemoAppliance
+
+    @State private var controls: AirconControlState
+    @State private var dragStartTemperature: String?
+
+    init(appliance: RemoAppliance) {
+        self.appliance = appliance
+        _controls = State(initialValue: AirconControlState(appliance: appliance))
     }
 
     var body: some View {
@@ -58,6 +69,12 @@ struct AirconControlView: View {
         }
         .frame(maxWidth: 680)
         .padding(.top, 4)
+        .onChange(of: store.lastRefreshedAt) { _ in
+            synchronizeWithLatestAppliance()
+        }
+        .onChange(of: appliance.id) { _ in
+            synchronizeWithLatestAppliance()
+        }
     }
 
     private var sensorHeader: some View {
@@ -81,9 +98,9 @@ struct AirconControlView: View {
                 .fill(NaturePalette.softSurface)
 
             RoundedRectangle(cornerRadius: 22)
-                .fill(powerIsOn ? cardFillColor : NaturePalette.softSurface)
+                .fill(controls.powerIsOn ? cardFillColor : NaturePalette.softSurface)
                 .frame(height: cardFillHeight)
-                .opacity(powerIsOn ? 1 : 0.52)
+                .opacity(controls.powerIsOn ? 1 : 0.52)
 
             VStack(spacing: 6) {
                 Capsule()
@@ -95,12 +112,12 @@ struct AirconControlView: View {
 
                 Text("設定温度")
                     .font(.caption.weight(.medium))
-                    .foregroundStyle(powerIsOn ? NaturePalette.muted : NaturePalette.muted.opacity(0.55))
+                    .foregroundStyle(controls.powerIsOn ? NaturePalette.muted : NaturePalette.muted.opacity(0.55))
 
                 Text(temperatureDisplay)
                     .font(.system(size: 44, weight: .regular, design: .rounded))
                     .monospacedDigit()
-                    .foregroundStyle(powerIsOn ? NaturePalette.ink.opacity(0.72) : NaturePalette.muted.opacity(0.45))
+                    .foregroundStyle(controls.powerIsOn ? NaturePalette.ink.opacity(0.72) : NaturePalette.muted.opacity(0.45))
                     .minimumScaleFactor(0.72)
                     .padding(.bottom, 24)
             }
@@ -122,13 +139,13 @@ struct AirconControlView: View {
     private var powerButton: some View {
         CircleRemoteButton(
             size: 68,
-            foreground: powerIsOn ? NaturePalette.mint : NaturePalette.muted,
+            foreground: controls.powerIsOn ? NaturePalette.mint : NaturePalette.muted,
             background: NaturePalette.surface,
-            border: powerIsOn ? NaturePalette.mint : Color.clear,
-            borderWidth: powerIsOn ? 2 : 0
+            border: controls.powerIsOn ? NaturePalette.mint : Color.clear,
+            borderWidth: controls.powerIsOn ? 2 : 0
         ) {
-            if powerIsOn {
-                powerIsOn = false
+            if controls.powerIsOn {
+                controls.powerIsOn = false
                 sendPowerOff()
             } else {
                 sendCurrentSettings(powerOn: true)
@@ -137,14 +154,14 @@ struct AirconControlView: View {
             Image(systemName: "power")
                 .font(.system(size: 30, weight: .regular))
         }
-        .accessibilityLabel(powerIsOn ? "電源オフ" : "電源オン")
+        .accessibilityLabel(controls.powerIsOn ? "電源オフ" : "電源オン")
     }
 
     private var modeSelector: some View {
         HStack(spacing: 0) {
             ForEach(primaryModeOptions, id: \.self) { mode in
                 Button {
-                    operationMode = mode
+                    controls.operationMode = mode
                     normalizeSelectionsForMode()
                     sendCurrentSettings(powerOn: true)
                 } label: {
@@ -154,9 +171,9 @@ struct AirconControlView: View {
                         Text(airconModeLabel(mode))
                             .font(.caption.weight(.semibold))
                     }
-                    .foregroundStyle(operationMode == mode ? Color.white : NaturePalette.ink)
+                    .foregroundStyle(controls.operationMode == mode ? Color.white : NaturePalette.ink)
                     .frame(maxWidth: .infinity, minHeight: 64)
-                    .background(operationMode == mode ? NaturePalette.selection : NaturePalette.surface)
+                    .background(controls.operationMode == mode ? NaturePalette.selection : NaturePalette.surface)
                 }
                 .buttonStyle(.plain)
 
@@ -173,26 +190,26 @@ struct AirconControlView: View {
 
     private var detailTiles: some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 92), spacing: 14)], spacing: 16) {
-            controlTile(title: "風量", value: airVolumeLabel(airVolume), systemImage: "fanblades.fill") {
-                cycleSelection($airVolume, options: volumeOptions)
+            controlTile(title: "風量", value: airVolumeLabel(controls.airVolume), systemImage: "fanblades.fill") {
+                cycleSelection($controls.airVolume, options: volumeOptions)
                 sendCurrentSettings(powerOn: true)
             }
 
-            controlTile(title: "上下風向", value: airDirectionLabel(airDirection), systemImage: "wind") {
-                cycleSelection($airDirection, options: directionOptions)
+            controlTile(title: "上下風向", value: airDirectionLabel(controls.airDirection), systemImage: "wind") {
+                cycleSelection($controls.airDirection, options: directionOptions)
                 sendCurrentSettings(powerOn: true)
             }
 
             if horizontalOptions.isEmpty == false {
-                controlTile(title: "左右風向", value: airDirectionLabel(horizontalDirection), systemImage: "arrow.left.and.right") {
-                    cycleSelection($horizontalDirection, options: horizontalOptions)
+                controlTile(title: "左右風向", value: airDirectionLabel(controls.horizontalDirection), systemImage: "arrow.left.and.right") {
+                    cycleSelection($controls.horizontalDirection, options: horizontalOptions)
                     sendCurrentSettings(powerOn: true)
                 }
             }
 
             ForEach(extraFixedButtons, id: \.self) { button in
                 controlTile(title: fixedButtonLabel(button), value: "", systemImage: fixedButtonIcon(button)) {
-                    powerIsOn = true
+                    controls.powerIsOn = true
                     sendButton(button)
                 }
             }
@@ -225,7 +242,7 @@ struct AirconControlView: View {
     }
 
     private var selectedModeRange: RemoAirconModeRange? {
-        appliance.aircon?.range?.modes[operationMode]
+        appliance.aircon?.range?.modes[controls.operationMode]
     }
 
     private var roomTemperatureText: String? {
@@ -241,7 +258,7 @@ struct AirconControlView: View {
     }
 
     private var cardFillColor: Color {
-        switch operationMode.lowercased() {
+        switch controls.operationMode.lowercased() {
         case "warm", "heat":
             return NaturePalette.warm
         case "cool":
@@ -257,7 +274,7 @@ struct AirconControlView: View {
 
     private var cardFillHeight: CGFloat {
         let options = temperatureOptions.compactMap(Double.init)
-        guard let current = Double(temperature),
+        guard let current = Double(controls.temperature),
               let min = options.min(),
               let max = options.max(),
               max > min else {
@@ -286,23 +303,23 @@ struct AirconControlView: View {
 
     private var modeOptions: [String] {
         let values = appliance.aircon?.range?.modes.keys.sorted() ?? []
-        return includeCurrent(operationMode, in: orderedModes(values.isEmpty ? ["auto", "cool", "warm", "dry", "blow"] : values))
+        return includeCurrent(controls.operationMode, in: orderedModes(values.isEmpty ? ["auto", "cool", "warm", "dry", "blow"] : values))
     }
 
     private var temperatureOptions: [String] {
-        numericSort(includeCurrent(temperature, in: selectedModeRange?.temp ?? (18...30).map(String.init)))
+        numericSort(includeCurrent(controls.temperature, in: selectedModeRange?.temp ?? (18...30).map(String.init)))
     }
 
     private var volumeOptions: [String] {
-        includeCurrent(airVolume, in: selectedModeRange?.vol ?? ["", "1", "2", "3", "4", "5"])
+        includeCurrent(controls.airVolume, in: selectedModeRange?.vol ?? ["", "1", "2", "3", "4", "5"])
     }
 
     private var directionOptions: [String] {
-        includeCurrent(airDirection, in: selectedModeRange?.dir ?? ["", "1", "2", "3", "4", "5"])
+        includeCurrent(controls.airDirection, in: selectedModeRange?.dir ?? ["", "1", "2", "3", "4", "5"])
     }
 
     private var horizontalOptions: [String] {
-        includeCurrent(horizontalDirection, in: selectedModeRange?.dirh ?? [])
+        includeCurrent(controls.horizontalDirection, in: selectedModeRange?.dirh ?? [])
     }
 
     private var extraFixedButtons: [String] {
@@ -313,7 +330,7 @@ struct AirconControlView: View {
     }
 
     private var temperatureDisplay: String {
-        temperature.isEmpty ? "-" : "\(temperature)°"
+        controls.temperature.isEmpty ? "-" : "\(controls.temperature)°"
     }
 
     private func includeCurrent(_ current: String, in values: [String]) -> [String] {
@@ -327,30 +344,32 @@ struct AirconControlView: View {
     }
 
     private func normalizeSelectionsForMode() {
-        if temperatureOptions.contains(temperature) == false {
-            temperature = temperatureOptions.first ?? temperature
+        guard let selectedModeRange else {
+            return
         }
-        if volumeOptions.contains(airVolume) == false {
-            airVolume = volumeOptions.first ?? airVolume
-        }
-        if directionOptions.contains(airDirection) == false {
-            airDirection = directionOptions.first ?? airDirection
-        }
-        if horizontalOptions.isEmpty == false && horizontalOptions.contains(horizontalDirection) == false {
-            horizontalDirection = horizontalOptions.first ?? horizontalDirection
-        }
+
+        controls.temperature = normalizedAirconValue(
+            controls.temperature,
+            allowedValues: numericSort(selectedModeRange.temp)
+        )
+        controls.airVolume = normalizedAirconValue(controls.airVolume, allowedValues: selectedModeRange.vol)
+        controls.airDirection = normalizedAirconValue(controls.airDirection, allowedValues: selectedModeRange.dir)
+        controls.horizontalDirection = normalizedAirconValue(
+            controls.horizontalDirection,
+            allowedValues: selectedModeRange.dirh
+        )
     }
 
     private func stepTemperature(by delta: Int) {
-        guard let next = steppedValue(current: temperature, in: temperatureOptions, by: delta) else {
+        guard let next = steppedValue(current: controls.temperature, in: temperatureOptions, by: delta) else {
             return
         }
-        temperature = next
+        controls.temperature = next
     }
 
     private func updateTemperatureFromDrag(translationHeight: CGFloat) {
         if dragStartTemperature == nil {
-            dragStartTemperature = temperature
+            dragStartTemperature = controls.temperature
         }
 
         guard let startTemperature = dragStartTemperature else {
@@ -358,13 +377,13 @@ struct AirconControlView: View {
         }
 
         let stepCount = Int((-translationHeight / 18).rounded())
-        temperature = temperatureByOffset(from: startTemperature, offset: stepCount) ?? temperature
+        controls.temperature = temperatureByOffset(from: startTemperature, offset: stepCount) ?? controls.temperature
     }
 
     private func commitTemperatureDrag() {
         defer { dragStartTemperature = nil }
 
-        guard let dragStartTemperature, dragStartTemperature != temperature else {
+        guard let dragStartTemperature, dragStartTemperature != controls.temperature else {
             return
         }
 
@@ -372,7 +391,7 @@ struct AirconControlView: View {
     }
 
     private func canStepTemperature(by delta: Int) -> Bool {
-        steppedValue(current: temperature, in: temperatureOptions, by: delta) != nil
+        steppedValue(current: controls.temperature, in: temperatureOptions, by: delta) != nil
     }
 
     private func steppedValue(current: String, in options: [String], by delta: Int) -> String? {
@@ -434,34 +453,45 @@ struct AirconControlView: View {
     }
 
     private func sendCurrentSettings(powerOn: Bool) {
-        powerIsOn = powerOn
+        normalizeSelectionsForMode()
+        controls.powerIsOn = powerOn
+        let form = airconForm(button: "")
         Task {
-            await store.setAircon(appliance: appliance, form: airconForm(button: ""))
+            await store.setAircon(appliance: appliance, form: form)
         }
     }
 
     private func sendPowerOff() {
+        normalizeSelectionsForMode()
+        let form = airconForm(button: "power-off")
         Task {
-            await store.setAircon(appliance: appliance, form: airconForm(button: "power-off"))
+            await store.setAircon(appliance: appliance, form: form)
         }
     }
 
     private func sendButton(_ button: String) {
+        normalizeSelectionsForMode()
+        let form = airconForm(button: button)
         Task {
-            await store.setAircon(appliance: appliance, form: airconForm(button: button))
+            await store.setAircon(appliance: appliance, form: form)
         }
     }
 
     private func airconForm(button: String) -> [String: String] {
         [
-            "temperature": temperature,
+            "temperature": controls.temperature,
             "temperature_unit": appliance.settings?.temperatureUnit ?? appliance.aircon?.tempUnit ?? "c",
-            "operation_mode": operationMode,
-            "air_volume": airVolume,
-            "air_direction": airDirection,
-            "air_direction_h": horizontalDirection,
+            "operation_mode": controls.operationMode,
+            "air_volume": controls.airVolume,
+            "air_direction": controls.airDirection,
+            "air_direction_h": controls.horizontalDirection,
             "button": button
         ]
+    }
+
+    private func synchronizeWithLatestAppliance() {
+        controls.synchronize(with: appliance)
+        dragStartTemperature = nil
     }
 
     private func orderedModes(_ values: [String]) -> [String] {
@@ -557,4 +587,11 @@ struct AirconControlView: View {
             return "bolt.circle"
         }
     }
+}
+
+func normalizedAirconValue(_ currentValue: String, allowedValues: [String]) -> String {
+    guard allowedValues.isEmpty == false, allowedValues.contains(currentValue) == false else {
+        return currentValue
+    }
+    return allowedValues[0]
 }

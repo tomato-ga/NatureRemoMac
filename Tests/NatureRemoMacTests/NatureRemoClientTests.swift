@@ -16,6 +16,8 @@ final class NatureRemoClientTests: XCTestCase {
             XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer test-token")
             XCTAssertEqual(request.value(forHTTPHeaderField: "Accept"), "application/json")
             XCTAssertEqual(request.value(forHTTPHeaderField: "User-Agent"), "NatureRemoMac/0.1.0")
+            XCTAssertEqual(request.cachePolicy, .reloadIgnoringLocalCacheData)
+            XCTAssertEqual(request.value(forHTTPHeaderField: "Cache-Control"), "no-cache")
             return (response(for: request), expectedData)
         }
 

@@ -103,6 +103,11 @@ struct NatureRemoClient {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue(AppMetadata.userAgent, forHTTPHeaderField: "User-Agent")
 
+        if method == "GET" {
+            request.cachePolicy = .reloadIgnoringLocalCacheData
+            request.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
+        }
+
         if let form {
             request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
             request.httpBody = Self.encodeForm(form)
